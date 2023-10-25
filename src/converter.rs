@@ -3,16 +3,16 @@ use std::{fs::File, io::BufReader, io::Write, path::Path};
 
 use crate::braille;
 
-const CHUNK_WIDTH: u32 = 2;
-const CHUNK_HEIGHT: u32 = 4;
+const CHUNK_WIDTH: usize = 2;
+const CHUNK_HEIGHT: usize = 4;
 
-type RgbaPixelChunk = [[Rgba<u8>; CHUNK_WIDTH as usize]; CHUNK_HEIGHT as usize];
-type BoolPixelChunk = [[bool; CHUNK_WIDTH as usize]; CHUNK_HEIGHT as usize];
+type RgbaPixelChunk = [[Rgba<u8>; CHUNK_WIDTH]; CHUNK_HEIGHT];
+type BoolPixelChunk = [[bool; CHUNK_WIDTH]; CHUNK_HEIGHT];
 
 pub struct ImageToBrailleConverter {
     pub image: DynamicImage,
-    pub width: u32,
-    pub height: u32,
+    pub width: usize,
+    pub height: usize,
 }
 
 impl ImageToBrailleConverter {
@@ -25,19 +25,20 @@ impl ImageToBrailleConverter {
 
         Ok(Self {
             image: img,
-            width,
-            height,
+            width: width as usize,
+            height: height as usize,
         })
     }
 
-    pub fn resize(&self, desired_width_chars: u32) -> Self {
+    pub fn resize(&self, desired_width_chars: usize) -> Self {
         let desired_width = desired_width_chars * CHUNK_WIDTH;
-        let scaled_height = (desired_width as f32 / self.width as f32 * self.height as f32) as u32;
+        let scaled_height =
+            (desired_width as f32 / self.width as f32 * self.height as f32) as usize;
         let cropped_height = scaled_height - (scaled_height % CHUNK_HEIGHT);
 
         let scaled_img = self.image.resize_exact(
-            desired_width,
-            cropped_height,
+            desired_width as u32,
+            cropped_height as u32,
             image::imageops::FilterType::Nearest,
         );
 
@@ -54,7 +55,7 @@ impl ImageToBrailleConverter {
             (p[0] as u16 + p[1] as u16 + p[2] as u16) / 3 < ((255 as f64 * 0.8) as u16)
         });
 
-        for lines in chunks.chunks(self.width as usize / CHUNK_WIDTH as usize) {
+        for lines in chunks.chunks(self.width / CHUNK_WIDTH) {
             for chunk in lines {
                 let braille_char = braille::chunk_to_braille(chunk.clone());
                 write!(output, "{}", braille_char)?;
@@ -71,12 +72,12 @@ fn chunkify_image(img: &image::DynamicImage) -> Vec<RgbaPixelChunk> {
 
     let mut chunks = Vec::new();
 
-    for y in (0..height).step_by(CHUNK_HEIGHT as usize) {
-        for x in (0..width).step_by(CHUNK_WIDTH as usize) {
-            let mut chunk = [[Rgba([0, 0, 0, 0]); CHUNK_WIDTH as usize]; CHUNK_HEIGHT as usize];
+    for y in (0..height).step_by(CHUNK_HEIGHT) {
+        for x in (0..width).step_by(CHUNK_WIDTH) {
+            let mut chunk = [[Rgba([0, 0, 0, 0]); CHUNK_WIDTH]; CHUNK_HEIGHT];
 
-            for r in 0..(CHUNK_HEIGHT as usize) {
-                for c in 0..(CHUNK_WIDTH as usize) {
+            for r in 0..CHUNK_HEIGHT {
+                for c in 0..CHUNK_WIDTH {
                     chunk[r][c] = img.get_pixel(x + c as u32, y + r as u32);
                 }
             }
@@ -99,10 +100,10 @@ fn filter_chunks(
 }
 
 fn filter_chunk(chunk: RgbaPixelChunk, predicate: &impl Fn(Rgba<u8>) -> bool) -> BoolPixelChunk {
-    let mut out = [[false; CHUNK_WIDTH as usize]; CHUNK_HEIGHT as usize];
+    let mut out = [[false; CHUNK_WIDTH]; CHUNK_HEIGHT];
 
-    for r in 0..(CHUNK_HEIGHT as usize) {
-        for c in 0..(CHUNK_WIDTH as usize) {
+    for r in 0..CHUNK_HEIGHT {
+        for c in 0..CHUNK_WIDTH {
             out[r][c] = predicate(chunk[r][c]);
         }
     }
