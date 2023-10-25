@@ -50,12 +50,10 @@ impl ImageToBrailleConverter {
     }
 
     pub fn convert(&self, output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
-        let chunks = chunkify_image(&self.image);
-        let chunks = filter_chunks(chunks, |p| {
-            (p[0] as u16 + p[1] as u16 + p[2] as u16) / 3 < ((255 as f64 * 0.8) as u16)
-        });
+        let rgb_chunks = chunkify_image(&self.image);
+        let bool_chunks = filter_chunks(rgb_chunks, brightness_filter);
 
-        for lines in chunks.chunks(self.width / CHUNK_WIDTH) {
+        for lines in bool_chunks.chunks(self.width / CHUNK_WIDTH) {
             for chunk in lines {
                 let braille_char = braille::chunk_to_braille(chunk.clone());
                 write!(output, "{}", braille_char)?;
@@ -65,6 +63,13 @@ impl ImageToBrailleConverter {
 
         Ok(())
     }
+}
+
+fn brightness_filter(pixel: Rgba<u8>) -> bool {
+    let Rgba([r, g, b, _]) = pixel;
+    let brightness = (r as f32 + g as f32 + b as f32) / 3.0;
+
+    brightness < 128.0
 }
 
 fn chunkify_image(img: &image::DynamicImage) -> Vec<RgbaPixelChunk> {
