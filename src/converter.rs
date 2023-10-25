@@ -54,7 +54,7 @@ impl ImageToBrailleConverter {
 
         for lines in chunks.chunks(self.width / CHUNK_WIDTH) {
             for chunk in lines {
-                let braille_char = braille::chunk_to_braille(chunk.clone());
+                let braille_char = braille::chunk_to_braille(*chunk);
                 write!(output, "{braille_char}")?;
             }
             writeln!(output)?;
