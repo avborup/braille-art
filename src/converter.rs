@@ -6,7 +6,6 @@ use crate::braille;
 const CHUNK_WIDTH: usize = 2;
 const CHUNK_HEIGHT: usize = 4;
 
-type RgbaPixelChunk = [[Rgba<u8>; CHUNK_WIDTH]; CHUNK_HEIGHT];
 type BoolPixelChunk = [[bool; CHUNK_WIDTH]; CHUNK_HEIGHT];
 
 pub struct ImageToBrailleConverter {
@@ -50,13 +49,13 @@ impl ImageToBrailleConverter {
     }
 
     pub fn convert(&self, output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
-        let rgb_chunks = chunkify_image(&self.image);
-        let bool_chunks = filter_chunks(rgb_chunks, brightness_filter);
+        let bool_pixels = filter_pixels(&self.image, brightness_filter);
+        let chunks = chunkify_pixels(bool_pixels);
 
-        for lines in bool_chunks.chunks(self.width / CHUNK_WIDTH) {
+        for lines in chunks.chunks(self.width / CHUNK_WIDTH) {
             for chunk in lines {
                 let braille_char = braille::chunk_to_braille(chunk.clone());
-                write!(output, "{}", braille_char)?;
+                write!(output, "{braille_char}")?;
             }
             writeln!(output)?;
         }
@@ -72,18 +71,36 @@ fn brightness_filter(pixel: Rgba<u8>) -> bool {
     brightness < 128.0
 }
 
-fn chunkify_image(img: &image::DynamicImage) -> Vec<RgbaPixelChunk> {
-    let (width, height) = img.dimensions();
+fn filter_pixels(
+    image: &image::DynamicImage,
+    predicate: impl Fn(Rgba<u8>) -> bool,
+) -> Vec<Vec<bool>> {
+    let mut pixels = Vec::new();
 
+    for y in 0..image.height() {
+        let mut row = Vec::new();
+
+        for x in 0..image.width() {
+            let pixel = image.get_pixel(x, y);
+            row.push(predicate(pixel));
+        }
+
+        pixels.push(row);
+    }
+
+    pixels
+}
+
+fn chunkify_pixels(img: Vec<Vec<bool>>) -> Vec<BoolPixelChunk> {
     let mut chunks = Vec::new();
 
-    for y in (0..height).step_by(CHUNK_HEIGHT) {
-        for x in (0..width).step_by(CHUNK_WIDTH) {
-            let mut chunk = [[Rgba([0, 0, 0, 0]); CHUNK_WIDTH]; CHUNK_HEIGHT];
+    for y in (0..img.len()).step_by(CHUNK_HEIGHT) {
+        for x in (0..img[y].len()).step_by(CHUNK_WIDTH) {
+            let mut chunk = [[false; CHUNK_WIDTH]; CHUNK_HEIGHT];
 
             for r in 0..CHUNK_HEIGHT {
                 for c in 0..CHUNK_WIDTH {
-                    chunk[r][c] = img.get_pixel(x + c as u32, y + r as u32);
+                    chunk[r][c] = img[y + r][x + c];
                 }
             }
 
@@ -92,26 +109,4 @@ fn chunkify_image(img: &image::DynamicImage) -> Vec<RgbaPixelChunk> {
     }
 
     chunks
-}
-
-fn filter_chunks(
-    chunks: Vec<RgbaPixelChunk>,
-    predicate: impl Fn(Rgba<u8>) -> bool,
-) -> Vec<BoolPixelChunk> {
-    chunks
-        .into_iter()
-        .map(|chunk| filter_chunk(chunk, &predicate))
-        .collect()
-}
-
-fn filter_chunk(chunk: RgbaPixelChunk, predicate: &impl Fn(Rgba<u8>) -> bool) -> BoolPixelChunk {
-    let mut out = [[false; CHUNK_WIDTH]; CHUNK_HEIGHT];
-
-    for r in 0..CHUNK_HEIGHT {
-        for c in 0..CHUNK_WIDTH {
-            out[r][c] = predicate(chunk[r][c]);
-        }
-    }
-
-    out
 }
