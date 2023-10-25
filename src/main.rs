@@ -1,7 +1,11 @@
 mod braille;
+mod converter;
 
-fn main() {
-    let chunk = [[true, true], [false, true], [false, false], [true, true]];
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let converter = converter::ImageToBrailleConverter::from_file("goose.jpg")?.resize(60);
 
-    println!("{}", braille::chunk_to_braille(chunk));
+    let mut stdout = std::io::stdout().lock();
+    converter.convert(&mut stdout)?;
+
+    Ok(())
 }
